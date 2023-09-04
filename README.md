@@ -14,21 +14,21 @@ Description of "Concussion" C2 System
 
 "Concussion" is a simple command and control (C2) system consisting of a server (c2_server.py), a client with a GUI (c2_client.py), and an optional simple C++ server (simple_server.cpp) for demonstration purposes. Here's what it can do
 
-    Server (c2_server.py):
+    Server (c2_server.py)
         Listens for incoming connections.
         Accepts encrypted commands from the client.
         Executes commands on the server's machine.
         Sends encrypted command output back to the client.
         Supports command history and an "exit" command to close the connection.
 
-    Client with GUI (c2_client.py):
+    Client with GUI (c2_client.py)
         Provides a user-friendly interface for sending commands to the server.
         Sends encrypted commands to the server.
         Displays the encrypted output received from the server.
         Allows viewing command history.
         Provides an "exit" button to close the connection gracefully.
 
-    Optional Simple C++ Server (simple_server.cpp):
+    Optional Simple C++ Server (simple_server.cpp)
         A demonstration server that listens on port 12345.
         Accepts connections and sends a welcome message.
 
