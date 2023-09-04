@@ -1,42 +1,87 @@
 #include <iostream>
-#include <cstring>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
+#include <string>
+#include <WS2tcpip.h>
+#include <winsock2.h>
+
+#pragma comment (lib, "ws2_32.lib")
 
 int main() {
-    int server_socket, client_socket;
-    struct sockaddr_in server_addr, client_addr;
+    // Initialize Winsock
+    WSADATA wsData;
+    WORD ver = MAKEWORD(2, 2);
+    int wsResult = WSAStartup(ver, &wsData);
+    if (wsResult != 0) {
+        std::cerr << "Can't start Winsock, Err #" << wsResult << std::endl;
+        return 1;
+    }
 
     // Create a socket
-    server_socket = socket(AF_INET, SOCK_STREAM, 0);
+    SOCKET listening = socket(AF_INET, SOCK_STREAM, 0);
+    if (listening == INVALID_SOCKET) {
+        std::cerr << "Can't create socket, Err #" << WSAGetLastError() << std::endl;
+        WSACleanup();
+        return 1;
+    }
 
-    // Configure the server address structure
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(12345);  // Choose a port
-    server_addr.sin_addr.s_addr = INADDR_ANY;
+    // Bind the socket to an IP address and port
+    sockaddr_in hint;
+    hint.sin_family = AF_INET;
+    hint.sin_port = htons(54000);  // Choose a port
+    hint.sin_addr.S_un.S_addr = INADDR_ANY;  // Listen on all available network interfaces
 
-    // Bind the socket to the server address
-    bind(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr));
+    bind(listening, (sockaddr*)&hint, sizeof(hint));
 
-    // Listen for incoming connections
-    listen(server_socket, 5);  // Number of queued connections
+    // Tell Winsock the socket is for listening
+    listen(listening, SOMAXCONN);
 
-    std::cout << "Server listening on port 12345..." << std::endl;
+    // Wait for a connection
+    sockaddr_in client;
+    int clientSize = sizeof(client);
 
-    // Accept an incoming connection
-    socklen_t client_addr_len = sizeof(client_addr);
-    client_socket = accept(server_socket, (struct sockaddr*)&client_addr, &client_addr_len);
+    SOCKET clientSocket = accept(listening, (sockaddr*)&client, &clientSize);
 
-    std::cout << "Accepted connection from " << inet_ntoa(client_addr.sin_addr) << std::endl;
+    char host[NI_MAXHOST];  // Client's remote name
+    char service[NI_MAXSERV];  // Service (i.e., port) the client is connected on
 
-    // Send a welcome message to the client
-    const char* welcome_message = "Welcome to the server!\n";
-    send(client_socket, welcome_message, strlen(welcome_message), 0);
+    ZeroMemory(host, NI_MAXHOST);
+    ZeroMemory(service, NI_MAXSERV);
 
-    // Close the sockets
-    close(client_socket);
-    close(server_socket);
+    if (getnameinfo((sockaddr*)&client, sizeof(client), host, NI_MAXHOST, service, NI_MAXSERV, 0) == 0) {
+        std::cout << host << " connected on port " << service << std::endl;
+    } else {
+        inet_ntop(AF_INET, &client.sin_addr, host, NI_MAXHOST);
+        std::cout << host << " connected on port " << ntohs(client.sin_port) << std::endl;
+    }
+
+    // Close listening socket
+    closesocket(listening);
+
+    // While loop: accept and echo message back to client
+    char buf[4096];
+    while (true) {
+        ZeroMemory(buf, 4096);
+
+        // Wait for client to send data
+        int bytesReceived = recv(clientSocket, buf, 4096, 0);
+        if (bytesReceived == SOCKET_ERROR) {
+            std::cerr << "Error in recv(). Quitting" << std::endl;
+            break;
+        }
+
+        if (bytesReceived == 0) {
+            std::cout << "Client disconnected" << std::endl;
+            break;
+        }
+
+        // Echo message back to client
+        send(clientSocket, buf, bytesReceived + 1, 0);
+    }
+
+    // Close the socket
+    closesocket(clientSocket);
+
+    // Cleanup Winsock
+    WSACleanup();
 
     return 0;
 }
